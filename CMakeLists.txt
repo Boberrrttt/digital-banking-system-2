@@ -21,7 +21,28 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Wextra -Wpedantic")
 set(LV_BUILD_SET_CONFIG_OPTS ON CACHE BOOL
     "create CMAKE variables from lv_conf_internal.h" FORCE)
 
+# Force touchscreen + framebuffer, disable other backends
+set(CONFIG_LV_USE_EVDEV ON)
+set(CONFIG_LV_USE_LINUX_FBDEV ON)
+
+# Disable other input/display backends
+set(CONFIG_LV_USE_SDL OFF)
+set(CONFIG_LV_USE_DRAW_SDL OFF)
+set(CONFIG_LV_USE_X11 OFF)
+set(CONFIG_LV_USE_WAYLAND OFF)
+set(CONFIG_LV_USE_LINUX_DRM OFF)
+set(CONFIG_LV_USE_LINUX_DRM_GBM_BUFFERS OFF)
+set(CONFIG_LV_USE_LIBINPUT OFF)
+
+
+add_definitions(-DLV_CONF_PATH="${CMAKE_SOURCE_DIR}/lv_conf.h")
+add_definitions(-DLV_CONF_INCLUDE_SIMPLE)
+
 add_subdirectory(lvgl)
+
+add_subdirectory(src/ui)
+
+file (GLOB_RECURSE UI_SOURCES CONFIGURE_DEPENDS src/ui/*.c)
 
 if (CONFIG_LV_USE_EVDEV)
     message("Including EVDEV support")
@@ -114,7 +135,7 @@ if (CONFIG_LV_USE_WAYLAND)
     if(DEFINED ENV{SDKTARGETSYSROOT} AND DEFINED ENV{SYSROOT})
         message(FATAL_ERROR "Both SDKTARGETSYSROOT and SYSROOT are set. Please set only one.")
     endif()
-    
+
     if(DEFINED ENV{SDKTARGETSYSROOT})
         set(PROTOCOL_ROOT "$ENV{SDKTARGETSYSROOT}/usr/share/wayland-protocols")
     elseif(DEFINED ENV{SYSROOT})
@@ -122,40 +143,40 @@ if (CONFIG_LV_USE_WAYLAND)
     else()
         set(PROTOCOL_ROOT "/usr/share/wayland-protocols")
     endif()
-    
+
     if(NOT EXISTS ${PROTOCOL_ROOT})
         message(FATAL_ERROR "Wayland protocols not found at ${PROTOCOL_ROOT}")
     endif()
-    
+
     set(PROTOCOLS_DIR "${CMAKE_CURRENT_BINARY_DIR}/protocols")
     file(MAKE_DIRECTORY ${PROTOCOLS_DIR})
-    
+
     set(WAYLAND_PROTOCOLS_SRC "")
-    
+
     # Generate xdg-shell protocol (always)
     set(XDG_SHELL_XML "${PROTOCOL_ROOT}/stable/xdg-shell/xdg-shell.xml")
     set(XDG_SHELL_HEADER "${PROTOCOLS_DIR}/wayland_xdg_shell.h")
     set(XDG_SHELL_SOURCE "${PROTOCOLS_DIR}/wayland_xdg_shell.c")
-    
+
     if(NOT EXISTS ${XDG_SHELL_HEADER} OR NOT EXISTS ${XDG_SHELL_SOURCE})
         execute_process(COMMAND wayland-scanner client-header ${XDG_SHELL_XML} ${XDG_SHELL_HEADER})
         execute_process(COMMAND wayland-scanner private-code ${XDG_SHELL_XML} ${XDG_SHELL_SOURCE})
     endif()
     list(APPEND WAYLAND_PROTOCOLS_SRC ${XDG_SHELL_SOURCE})
-    
+
     # Generate dmabuf protocol (if config is set)
     if(CONFIG_LV_WAYLAND_USE_DMABUF)
         set(DMABUF_XML "${PROTOCOL_ROOT}/stable/linux-dmabuf/linux-dmabuf-v1.xml")
         set(DMABUF_HEADER "${PROTOCOLS_DIR}/wayland_linux_dmabuf.h")
         set(DMABUF_SOURCE "${PROTOCOLS_DIR}/wayland_linux_dmabuf.c")
-        
+
         if(NOT EXISTS ${DMABUF_HEADER} OR NOT EXISTS ${DMABUF_SOURCE})
             execute_process(COMMAND wayland-scanner client-header ${DMABUF_XML} ${DMABUF_HEADER})
             execute_process(COMMAND wayland-scanner private-code ${DMABUF_XML} ${DMABUF_SOURCE})
         endif()
         list(APPEND WAYLAND_PROTOCOLS_SRC ${DMABUF_SOURCE})
     endif()
-    
+
     list(APPEND PKG_CONFIG_INC ${PROTOCOLS_DIR})
     list(APPEND LV_LINUX_BACKEND_SRC src/lib/display_backends/wayland.c ${WAYLAND_PROTOCOLS_SRC})
 
@@ -201,12 +222,23 @@ if (CONFIG_LV_USE_DRAW_G2D)
     list(APPEND PKG_CONFIG_LIB ${G2D_LIBRARY})
 endif()
 
+# ======= ADDED LIBUSB SUPPORT =======
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+list(APPEND PKG_CONFIG_LIB ${LIBUSB_LIBRARIES})
+list(APPEND PKG_CONFIG_INC ${LIBUSB_INCLUDE_DIRS})
+# ====================================
+
 file(GLOB LV_LINUX_SRC src/lib/*.c)
-set(LV_LINUX_INC src/lib)
+set(LV_LINUX_INC src/lib src/ui)
 
-target_include_directories(lvgl PUBLIC ${PKG_CONFIG_INC})
+target_include_directories(lvgl PUBLIC
+    ${PKG_CONFIG_INC}
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/ui/DBS_UI/src/ui
+)
 
-add_library(lvgl_linux STATIC ${LV_LINUX_SRC} ${LV_LINUX_BACKEND_SRC})
+add_library(lvgl_linux STATIC ${LV_LINUX_SRC} ${LV_LINUX_BACKEND_SRC} src/api/account/account.c)
 
 # If LVGL is configured to use LV_CONF_PATH or Kconfig
 # Set the exactly the same definitions on the lvgl_linux target
@@ -218,13 +250,21 @@ target_include_directories(lvgl_linux PUBLIC
 # Link LVGL with external dependencies - Modern CMake/CMP0079 allows this
 target_link_libraries(lvgl PUBLIC ${PKG_CONFIG_LIB} m pthread)
 
-add_executable(lvglsim src/main.c ${LV_LINUX_SRC} ${LV_LINUX_BACKEND_SRC})
-target_link_libraries(lvglsim lvgl_linux lvgl)
+# Explicitly add the main source files and important backends
+add_executable(dbanking
+    src/main.c
+    src/lib/driver_backends.c
+    src/lib/display_backends/fbdev.c
+    src/api/account/account.c
+    src/api/database.c
+    src/ui/DBS_UI/src/ui/receipt.c 
+)
 
-
+# Link the necessary LVGL libraries + LIBUSB
+target_link_libraries(dbanking lvgl_linux lvgl ui sqlite3 ${LIBUSB_LIBRARIES})
 
 # Install the lvgl_linux library and its headers
-install(DIRECTORY src/lib/
+install(DIRECTORY src/lib/ src/ui
     DESTINATION include/lvgl
     FILES_MATCHING
     PATTERN "backends*" EXCLUDE
@@ -234,4 +274,5 @@ install(TARGETS lvgl_linux
     ARCHIVE DESTINATION lib
 )
 
-add_custom_target(run COMMAND ${EXECUTABLE_OUTPUT_PATH}/lvglsim DEPENDS lvglsim)
+add_custom_target(run COMMAND ${EXECUTABLE_OUTPUT_PATH}/dbanking DEPENDS dbanking)
+

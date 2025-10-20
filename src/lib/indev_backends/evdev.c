@@ -114,9 +114,9 @@ static void discovery_cb(lv_indev_t *indev, lv_evdev_type_t type, void *user_dat
     lv_display_t *disp = user_data;
     lv_indev_set_display(indev, disp);
 
-    if(type == LV_EVDEV_TYPE_REL) {
+    /* if(type == LV_EVDEV_TYPE_REL) {
         set_mouse_cursor_icon(indev, disp);
-    }
+    }*/
 }
 
 /*
@@ -152,9 +152,8 @@ static void set_mouse_cursor_icon(lv_indev_t *indev, lv_display_t *display)
  *
  * @return input device
  */
-static lv_indev_t *init_pointer_evdev(lv_display_t *display)
-{
-    const char *input_device = getenv("LV_LINUX_EVDEV_POINTER_DEVICE");
+static lv_indev_t *init_pointer_evdev(lv_display_t *display) {
+    const char *input_device = "/dev/input/by-path/platform-soc:firmware:touchscreen-event";
 
     if (input_device == NULL) {
         LV_LOG_USER("Using evdev automatic discovery.");
@@ -163,14 +162,14 @@ static lv_indev_t *init_pointer_evdev(lv_display_t *display)
     }
 
     lv_indev_t *indev = lv_evdev_create(LV_INDEV_TYPE_POINTER, input_device);
-
     if (indev == NULL) {
         return NULL;
     }
 
     lv_indev_set_display(indev, display);
 
-    set_mouse_cursor_icon(indev, display);
     return indev;
 }
+
+
 #endif /*#if LV_USE_EVDEV*/

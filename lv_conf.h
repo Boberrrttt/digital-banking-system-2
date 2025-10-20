@@ -17,8 +17,8 @@
 #define LV_CONF_H
 
 /* If you need to include anything here, do it inside the `__ASSEMBLY__` guard */
-#if  0 && defined(__ASSEMBLY__)
-#include "my_include.h"
+#if 1 && defined(__ASSEMBLY__)
+// #include "my_include.h"
 #endif
 
 /*====================
@@ -591,8 +591,8 @@
 
 /* Montserrat fonts with ASCII range and some symbols using bpp = 4
  * https://fonts.google.com/specimen/Montserrat */
-#define LV_FONT_MONTSERRAT_8  0
-#define LV_FONT_MONTSERRAT_10 0
+#define LV_FONT_MONTSERRAT_8  1
+#define LV_FONT_MONTSERRAT_10 1
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_16 1
@@ -1189,6 +1189,8 @@
 /** Enable loading XML UIs runtime */
 #define LV_USE_XML    0
 
+#define LV_USE_MOUSE 0   // disable mouse support
+			 
 /** 1: Enable text translation support */
 #define LV_USE_TRANSLATION 0
 
@@ -1313,6 +1315,10 @@
 
 /** Driver for libinput input devices */
 #define LV_USE_LIBINPUT    0
+
+#define LV_USE_LINUX_FBDEV 1
+#define LV_USE_LINUX_EVDEV 1
+#define LV_USE_LINUX_MOUSE 0
 
 #if LV_USE_LIBINPUT
     #define LV_LIBINPUT_BSD    0
