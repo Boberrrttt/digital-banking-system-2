@@ -1,4 +1,4 @@
-#include "globals.c"
+#include "globals.h"
 
 char accountNumber[32] = {0};
 char amount[32] = {0};

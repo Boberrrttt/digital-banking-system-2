@@ -1888,7 +1888,7 @@ void create_screen_bank_transfer_complete() {
                         "                     GROUP ONE INC.\n"
                         "                            BANKKO\n"
                         "--------------------------------------------\n"
-                        "Transaction Type:          Bank Transfer\n"
+                        "Transaction Type:          Money Transfer\n"
                         "Account No. (To):       %*s\n"
                         "\n"
                         "Amount Sent:               %*s\n"
