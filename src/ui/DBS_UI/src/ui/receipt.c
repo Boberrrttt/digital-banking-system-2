@@ -53,10 +53,10 @@ void print_receipt(const char* account_no, const char* amount, const char* trans
     libusb_bulk_transfer(handle, 0x01, (unsigned char*)CMD_ALIGN_CENTER, sizeof(CMD_ALIGN_CENTER), &transferred, 0);
 
     const char *header =
-        "       GROUP ONE INC.\n"
-        "            BANKKO\n"
-        " 1234 Fake Street, Nowhere City\n"
-        "     Tel: (000) 123-4567\n"
+        "   GROUP ONE INC.\n"
+        "       BANKKO\n"
+        "1234 Fake Street, Nowhere City\n"
+        "    Tel: (000) 123-4567\n"
         "--------------------------------\n";
     libusb_bulk_transfer(handle, 0x01, (unsigned char*)header, strlen(header), &transferred, 0);
 
@@ -74,7 +74,7 @@ void print_receipt(const char* account_no, const char* amount, const char* trans
     libusb_bulk_transfer(handle, 0x01, (unsigned char*)line, strlen(line), &transferred, 0);
 
     char amount_line[32];
-    snprintf(amount_line, sizeof(amount_line), "₱%s", amount);
+    snprintf(amount_line, sizeof(amount_line), "Php %s", amount);
     justify_line(line, "Amount:", amount_line);
     strcat(line, "\n");
     libusb_bulk_transfer(handle, 0x01, (unsigned char*)line, strlen(line), &transferred, 0);

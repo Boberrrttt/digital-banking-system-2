@@ -16,7 +16,33 @@
 
 objects_t objects;
 lv_obj_t *tick_value_change_obj;
+lv_obj_t *transaction_list;
 // uint32_t active_theme_index = 0;
+
+void formatAccountNumber(const char *input, char *output, size_t size) {
+    int len = strlen(input);
+    int j = 0;
+
+    for (int i = 0; i < len && j < (int)size - 1; i++) {
+        // Copy digit
+        output[j++] = input[i];
+
+        // Add space after every 4 digits (but not at the end)
+        if ((i + 1) % 4 == 0 && i + 1 < len && j < (int)size - 1) {
+            output[j++] = ' ';
+        }
+    }
+
+    output[j] = '\0';
+}
+
+// static void cb_refresh_transaction_history(lv_event_t *e)
+//{
+    //if(accountNumber != NULL) {
+        //display_transaction_history(userAccountNumber);
+    //}
+//}
+
 
 void create_screen_main() {
     lv_obj_t *obj = lv_obj_create(0);
@@ -337,7 +363,7 @@ void create_screen_fingerprint_scan() {
                     lv_obj_set_pos(obj, 298, 103);
                     lv_obj_set_size(obj, 121, 132);
                     lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);  // make it clickable
-                    lv_obj_add_event_cb(obj, action_switch_to_dashboard, LV_EVENT_PRESSED, (void *)0);
+                    // lv_obj_add_event_cb(obj, action_switch_to_dashboard, LV_EVENT_PRESSED, (void *)0);
                     lv_image_set_src(obj, &img_fingerprint_icon);
                     lv_image_set_scale(obj, 100);
                 }
@@ -598,12 +624,18 @@ void create_screen_dashboard() {
 
         UserProfile user = loginWithFingerprint("12345678");
 
-        char maskedAccount[32];
-        int len = strlen(user.accountNumber);
-        if (len >= 4)
-         snprintf(maskedAccount, sizeof(maskedAccount), "**** **** **** %.4s", user.accountNumber + len - 4);
-        else
-         snprintf(maskedAccount, sizeof(maskedAccount), "****");
+	strncpy(userAccountNumber, user.accountNumber, sizeof(userAccountNumber)-1);
+	userAccountNumber[sizeof(userAccountNumber)-1] = '\0';
+        
+	char maskedAccount[32];
+	char formattedAccount[32];
+	formatAccountNumber(user.accountNumber, formattedAccount, sizeof(formattedAccount));
+
+	int len = strlen(formattedAccount);
+	if (len >= 4)
+	    snprintf(maskedAccount, sizeof(maskedAccount), "**** **** **** %.4s", formattedAccount + len - 4);
+	else
+	    snprintf(maskedAccount, sizeof(maskedAccount), "****");
 
         char firstName[32];
         char *spacePos = strchr(user.name, ' ');
@@ -1273,7 +1305,7 @@ void create_screen_mt_account_num() {
                     lv_textarea_set_max_length(obj, 128);
                     lv_textarea_set_placeholder_text(obj, "00000000");
                     lv_textarea_set_one_line(obj, false);
-                    lv_textarea_set_max_length(obj, 8);
+                    lv_textarea_set_max_length(obj, 16);
                     lv_textarea_set_password_mode(obj, false);
                     lv_obj_set_style_text_font(obj, &lv_font_montserrat_30, LV_PART_MAIN | LV_STATE_DEFAULT);
                 }
@@ -2284,6 +2316,7 @@ void tick_screen_cash_deposit_complete() {
 }
 
 void create_screen_transaction_history() {
+
     lv_obj_t *obj = lv_obj_create(0);
     objects.transaction_history = obj;
     lv_obj_set_pos(obj, 0, 0);
@@ -2295,26 +2328,80 @@ void create_screen_transaction_history() {
     lv_obj_set_style_bg_grad_stop(obj, 150, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_bg_image_src(obj, &img_bckg, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_text_font(obj, &lv_font_montserrat_14, LV_PART_MAIN | LV_STATE_DEFAULT);
+
     {
         lv_obj_t *parent_obj = obj;
+
         {
             // transac history cont
             {
                 lv_obj_t *parent_obj = obj;
-                {
-                    // transaction text
-                    lv_obj_t *obj = lv_label_create(parent_obj);
-                    objects.transaction_text = obj;
-                    lv_obj_set_pos(obj, -217, -309);
-                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                    lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_text_font(obj, &ui_font_montserrat_bold_28, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_align(obj, LV_ALIGN_BOTTOM_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Transaction History");
-                }
-                {
-                    // footing text 11
+
+		{
+		// Create the table
+		lv_obj_t *table = lv_table_create(parent_obj);
+		transaction_list = table;
+
+		lv_obj_set_size(table, 718, 210);
+		lv_obj_set_pos(table, 40, 60);
+
+		// Make table background transparent
+		lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_MAIN);
+		lv_obj_set_style_border_color(table, lv_color_white(), LV_PART_MAIN);
+		lv_obj_set_style_border_width(table, 2, LV_PART_MAIN);
+		lv_obj_set_style_radius(table, 5, LV_PART_MAIN);
+
+		// Make all cells transparent and text white
+		lv_obj_set_style_bg_opa(table, LV_OPA_TRANSP, LV_PART_ITEMS);
+		lv_obj_set_style_text_color(table, lv_color_white(), LV_PART_ITEMS);
+		lv_obj_set_style_text_align(table, LV_TEXT_ALIGN_CENTER, LV_PART_ITEMS);
+
+		// Define table dimensions
+		lv_table_set_col_cnt(table, 4);
+		lv_table_set_row_cnt(table, 5); // 1 header + 4 filler rows
+		
+		int count = 0;
+Transaction* txs = fetch_transaction_history(userAccountNumber, &count);
+
+if (txs != NULL && count > 0) {
+    // Set table row count: 1 for header + number of transactions
+    lv_table_set_row_cnt(table, count + 1);
+
+    // Column headers
+    const char* headers[] = {"ID", "Type", "Amount", "Date"};
+    for(int c = 0; c < 4; c++) {
+        lv_table_set_cell_value(table, 0, c, headers[c]);
+    }
+
+    char buf[32];
+    for(int r = 0; r < count; r++) {
+        // ID
+        snprintf(buf, sizeof(buf), "%d", txs[r].id);
+        lv_table_set_cell_value(table, r + 1, 0, buf);
+
+        // Type
+        lv_table_set_cell_value(table, r + 1, 1, txs[r].type);
+
+        // Amount
+        snprintf(buf, sizeof(buf), "%.2f", txs[r].amount);
+        lv_table_set_cell_value(table, r + 1, 2, buf);
+
+        // Date
+        lv_table_set_cell_value(table, r + 1, 3, txs[r].date);
+    }
+
+    free(txs);
+} else {
+    printf("No transactions found.\n");
+    // Optionally, clear table or show placeholder row
+    lv_table_set_row_cnt(table, 1);
+    const char* headers[] = {"ID", "Type", "Amount", "Date"};
+    for(int c = 0; c < 4; c++) {
+        lv_table_set_cell_value(table, 0, c, headers[c]);
+    }
+}
+}
+                { // footing text 11
                     lv_obj_t *obj = lv_label_create(parent_obj);
                     objects.footing_text_11 = obj;
                     lv_obj_set_pos(obj, 0, 145);
@@ -2325,8 +2412,8 @@ void create_screen_transaction_history() {
                     lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "For your query, please contact:\n(02) 123 456 7890");
                 }
-                {
-                    // transac history return button
+
+                { // transac history return button
                     lv_obj_t *obj = lv_button_create(parent_obj);
                     objects.transac_history_return_button = obj;
                     lv_obj_set_pos(obj, 0, 275);
@@ -2336,10 +2423,11 @@ void create_screen_transaction_history() {
                     lv_obj_set_style_bg_opa(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_margin_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+
                     {
                         lv_obj_t *parent_obj = obj;
-                        {
-                            // transac history return text
+
+                        { // transac history return text
                             lv_obj_t *obj = lv_label_create(parent_obj);
                             objects.transac_history_return_text = obj;
                             lv_obj_set_pos(obj, -47, 0);
@@ -2350,80 +2438,54 @@ void create_screen_transaction_history() {
                         }
                     }
                 }
-                {
-                        lv_obj_t *table = lv_table_create(parent_obj);
-                        objects.transaction_table = table;
-                        lv_obj_set_size(table, 718, 210);
-                        lv_obj_set_pos(table, 0, 41);
-
-                        lv_table_set_col_cnt(table, 4);
-                        lv_table_set_row_cnt(table, 6); // 1 header + 5 rows
-
-                        lv_table_set_col_width(table, 0, 60);
-                        lv_table_set_col_width(table, 1, 150);
-                        lv_table_set_col_width(table, 2, 150);
-                        lv_table_set_col_width(table, 3, 200);
-
-                        // Header
-                        lv_table_set_cell_value(table, 0, 0, "ID");
-                        lv_table_set_cell_value(table, 0, 1, "Type");
-                        lv_table_set_cell_value(table, 0, 2, "Amount");
-                        lv_table_set_cell_value(table, 0, 3, "Date");
-
-                        // Header style
-                        static lv_style_t header_style;
-                        lv_style_init(&header_style);
-                        lv_style_set_bg_color(&header_style, lv_color_hex(0xff0e2d76));
-                        lv_style_set_text_color(&header_style, lv_color_hex(0xffffffff));
-                        lv_style_set_border_width(&header_style, 1);
-                        lv_style_set_border_color(&header_style, lv_color_hex(0xffffffff));
-                        lv_style_set_pad_all(&header_style, 8);
-                        lv_style_set_height(&header_style, 30); // replaces lv_table_set_row_height
-
-                        lv_obj_add_style(table, &header_style, LV_PART_ITEMS);
-                }
-            }
-        }
-        {
-            // top bar cont 12
-            lv_obj_t *obj = lv_obj_create(parent_obj);
-            objects.top_bar_cont_12 = obj;
-            lv_obj_set_pos(obj, 0, 0);
-            lv_obj_set_size(obj, 800, 50);
-            lv_obj_set_style_pad_left(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_pad_top(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_pad_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_pad_bottom(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_radius(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
-            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff000000), LV_PART_MAIN | LV_STATE_DEFAULT);
-            lv_obj_set_style_bg_opa(obj, 50, LV_PART_MAIN | LV_STATE_DEFAULT);
-            {
-                lv_obj_t *parent_obj = obj;
-                {
-                    // banko logo 11
-                    lv_obj_t *obj = lv_image_create(parent_obj);
-                    objects.banko_logo_11 = obj;
-                    lv_obj_set_pos(obj, 34, 6);
-                    lv_obj_set_size(obj, 87, 39);
-                    lv_image_set_src(obj, &img_ban_ko_logo);
-                    lv_image_set_scale(obj, 30);
-                }
-                {
-                    // time label tf_11
-                    lv_obj_t *obj = lv_label_create(parent_obj);
-                    objects.time_label_tf_11 = obj;
-                    lv_obj_set_pos(obj, 735, 16);
-                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                    lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_text_font(obj, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "00:00");
-                }
             }
         }
     }
 
+    // Top bar
+    lv_obj_t *parent_obj = obj;
+
+    { // top bar cont 12
+        lv_obj_t *obj = lv_obj_create(parent_obj);
+        objects.top_bar_cont_12 = obj;
+        lv_obj_set_pos(obj, 0, 0);
+        lv_obj_set_size(obj, 800, 50);
+        lv_obj_set_style_pad_left(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_top(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_bottom(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_radius(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_color(obj, lv_color_hex(0xff000000), LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_bg_opa(obj, 50, LV_PART_MAIN | LV_STATE_DEFAULT);
+
+        {
+            lv_obj_t *parent_obj = obj;
+
+            { // banko logo 11
+                lv_obj_t *obj = lv_image_create(parent_obj);
+                objects.banko_logo_11 = obj;
+                lv_obj_set_pos(obj, 34, 6);
+                lv_obj_set_size(obj, 87, 39);
+                lv_image_set_src(obj, &img_ban_ko_logo);
+                lv_image_set_scale(obj, 30);
+            }
+
+            { // time label tf_11
+                lv_obj_t *obj = lv_label_create(parent_obj);
+                objects.time_label_tf_11 = obj;
+                lv_obj_set_pos(obj, 735, 16);
+                lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_obj_set_style_text_font(obj, &lv_font_montserrat_16, LV_PART_MAIN | LV_STATE_DEFAULT);
+                lv_label_set_text(obj, "00:00");
+            }
+        }
+    }
+
+    // ✅ Add screen load event to refresh transaction history every time screen is shown
+    //lv_obj_add_event_cb(objects.transaction_history, cb_refresh_transaction_history, LV_EVENT_SCREEN_LOAD_START, NULL);
     tick_screen_transaction_history();
 }
 

@@ -3,8 +3,6 @@
 
 #include <lvgl/lvgl.h>
 
-
-
 #if defined(EEZ_FOR_LVGL)
 #include <eez/flow/lvgl_api.h>
 #endif
@@ -17,8 +15,6 @@
 extern "C" {
 #endif
 
-
-
 void ui_init();
 void ui_tick();
 
@@ -26,8 +22,11 @@ void ui_tick();
 void loadScreen(enum ScreensEnum screenId);
 #endif
 
+// ➜ ADD THIS LINE (GLOBAL LIST DECLARATION)
+extern lv_obj_t *transaction_list;
+
 #ifdef __cplusplus
 }
 #endif
+#endif
 
-#endif // EEZ_LVGL_UI_GUI_H
