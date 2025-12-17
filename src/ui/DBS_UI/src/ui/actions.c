@@ -9,6 +9,8 @@
 #include "screens.h"
 #include "globals.h"
 #include "receipt.h"
+#include "actions.h"
+#include "types.h"
 
 extern lv_obj_t *objects_balance_tf;
 extern lv_obj_t *objects_transaction_history;
@@ -17,20 +19,55 @@ extern char userAccountNumber[];
 FILE *fp_fingerprint = NULL;
 lv_timer_t *fingerprint_timer = NULL;
 
-typedef struct {
-    char accountNumber[32];
-    char name[64];
-    double balance;
-    int fingerprintId;
-    char pin[16];
-} User;
+volatile int billPulseCount = 0;
+volatile int billDetected = 0;
+double billValue = 0.0;
 
-typedef struct {
-    int id;
-    char type[32];
-    double amount;
-    char date[32];
-} Transaction;
+
+void refresh_transaction_history_table() {
+    // Check that the user is logged in and the table exists
+    if (!currentUser || !transaction_list) {
+        printf("[ERROR] Cannot refresh table: user or table is NULL\n");
+        return;
+    }
+
+    int count = 0;
+    // Fetch transactions for the logged-in user
+    Transaction* txs = fetch_transaction_history(userAccountNumber, &count);
+
+    // Ensure at least the header row exists
+    lv_table_set_row_cnt(transaction_list, (count > 0 ? count : 0) + 1);
+
+    // Set column headers
+    const char* headers[] = {"ID", "Type", "Amount", "Date"};
+    for (int c = 0; c < 4; c++) {
+        lv_table_set_cell_value(transaction_list, 0, c, headers[c]);
+    }
+
+    // Fill the table rows with transaction data
+    if (txs != NULL && count > 0) {
+        char buf[32];
+        for (int r = 0; r < count; r++) {
+            // ID
+            snprintf(buf, sizeof(buf), "%d", txs[r].id);
+            lv_table_set_cell_value(transaction_list, r + 1, 0, buf);
+
+            // Type
+            lv_table_set_cell_value(transaction_list, r + 1, 1, txs[r].type);
+
+            // Amount
+            snprintf(buf, sizeof(buf), "%.2f", txs[r].amount);
+            lv_table_set_cell_value(transaction_list, r + 1, 2, buf);
+
+            // Date
+            lv_table_set_cell_value(transaction_list, r + 1, 3, txs[r].date);
+        }
+
+        free(txs);
+    } else {
+        printf("[INFO] No transactions found for user %s\n", currentUser->name);
+    }
+}
 
 int run_fingerprint_auth() {
     char buffer[128];
@@ -45,6 +82,8 @@ int run_fingerprint_auth() {
     if (fgets(buffer, sizeof(buffer), fp_fingerprint) != NULL) {
         finger_id = atoi(buffer);
     }
+
+    currentFingerId = finger_id;
 
     return finger_id;
 }
@@ -137,7 +176,6 @@ User* get_user_by_fingerprint(int fingerprintId) {
     sqlite3 *db;
     sqlite3_stmt *stmt;
     User *user = malloc(sizeof(User));
-
     if (!user) return NULL;
 
     if (sqlite3_open("/root/Desktop/test/lv_port_linux/src/api/bank.db", &db) != SQLITE_OK) {
@@ -165,6 +203,18 @@ User* get_user_by_fingerprint(int fingerprintId) {
         user->balance = sqlite3_column_double(stmt, 2);
         user->fingerprintId = sqlite3_column_int(stmt, 3);
         strncpy(user->pin, (const char*)sqlite3_column_text(stmt, 4), sizeof(user->pin)-1);
+
+        // Assign to global so other screens can access
+        currentUser = user;
+
+        // Print for debug
+        printf("User details:\n");
+        printf("Account Number: %s\n", user->accountNumber);
+        printf("Name: %s\n", user->name);
+        printf("Balance: %.2f\n", user->balance);
+        printf("Fingerprint ID: %d\n", user->fingerprintId);
+        printf("PIN: %s\n", user->pin);
+
     } else {
         printf("No user found for fingerprint: %d\n", fingerprintId);
         sqlite3_finalize(stmt);
@@ -175,7 +225,7 @@ User* get_user_by_fingerprint(int fingerprintId) {
 
     sqlite3_finalize(stmt);
     sqlite3_close(db);
-    return user;
+    return user; 
 }
 
 void fingerprint_timer_cb(lv_timer_t *timer) {
@@ -207,21 +257,35 @@ void fingerprint_timer_cb(lv_timer_t *timer) {
         // Fetch the user data from DB and store in global
         currentUser = get_user_by_fingerprint(finger_id);
         if (currentUser) {
-            // Update global account number too
-            strncpy(userAccountNumber, currentUser->accountNumber, sizeof(userAccountNumber)-1);
-            userAccountNumber[sizeof(userAccountNumber)-1] = '\0';
+            // Update global account number
+            strncpy(userAccountNumber, currentUser->accountNumber, sizeof(userAccountNumber) - 1);
+            userAccountNumber[sizeof(userAccountNumber) - 1] = '\0';
 
             printf("Logged in user: %s | Balance: %.2f\n", currentUser->name, currentUser->balance);
+
+	    if (currentUser) {
+	    printf("Logged in user: %s | Balance: %.2f\n", currentUser->name, currentUser->balance);
+
+	    // 1. Create all user screens (do not load any yet)
+	    create_screen_dashboard();
+	    create_screen_transaction_history();
+
+	    // 2. Load the dashboard screen explicitly
+	    lv_scr_load(objects.dashboard);
+
+	    // 3. Refresh transaction table (screen is not loaded, but table object exists)
+	    refresh_transaction_history_table();
+	}
+
         } else {
             printf("No user found for fingerprint %d\n", finger_id);
         }
 
-        // Switch to dashboard
-        lv_scr_load(objects.dashboard);
     } else {
         printf("Fingerprint not found\n");
     }
 }
+
 
 void action_switch_to_fingerprint(lv_event_t * e) {
     printf("Switch to fingerprint screen\n");
@@ -235,8 +299,42 @@ void action_switch_to_pin(lv_event_t * e) {
 }
 
 void action_switch_to_main(lv_event_t * e) {
-    printf("Switch to main screen\n");
+    printf("Switch to main screen (logout)\n");
+
+    // Load main screen
     lv_scr_load(objects.main);
+
+    // Delete other screens if they exist
+    if (objects.dashboard) {
+        lv_obj_del(objects.dashboard);
+        objects.dashboard = NULL;
+    }
+
+    if (objects.transaction_history) {
+        lv_obj_del(objects.transaction_history);
+        objects.transaction_history = NULL;
+    }
+
+    if (objects.fingerprint_scan) {
+        lv_obj_del(objects.fingerprint_scan);
+        objects.fingerprint_scan = NULL;
+    }
+
+    if (objects.money_transfer) {
+        lv_obj_del(objects.money_transfer);
+        objects.money_transfer = NULL;
+    }
+
+    // ...repeat for any other dynamic screens created at runtime
+
+    // Optional: reset any global user data
+    if (currentUser) {
+        free(currentUser);
+        currentUser = NULL;
+    }
+    userAccountNumber[0] = '\0';
+
+    create_screens();
 }
 
 void action_switch_to_dashboard(lv_event_t * e) {
@@ -255,8 +353,17 @@ void action_switch_to_cash_deposit(lv_event_t * e) {
 }
 
 void action_switch_to_transac_his(lv_event_t * e) {
+    if (!objects.transaction_history) {
+        printf("[ERROR] Transaction history screen not created yet!\n");
+        return;
+    }
+
     printf("Switch to transaction history screen\n");
+    // Load the screen
     lv_scr_load(objects.transaction_history);
+        // Refresh table content
+    refresh_transaction_history_table();
+
 }
 
 void action_switch_to_account_num(lv_event_t * e) {

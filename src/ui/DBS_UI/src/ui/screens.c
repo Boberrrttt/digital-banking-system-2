@@ -621,61 +621,74 @@ void tick_screen_pin() {
 }
 
 void create_screen_dashboard() {
+    
+ if (currentUser == NULL) {
+        printf("[ERROR] currentUser is NULL in dashboard!\n");
+        return;
+    }
 
-        UserProfile user = loginWithFingerprint("12345678");
+    lv_obj_clean(lv_scr_act());
 
-	strncpy(userAccountNumber, user.accountNumber, sizeof(userAccountNumber)-1);
-	userAccountNumber[sizeof(userAccountNumber)-1] = '\0';
-        
-	char maskedAccount[32];
-	char formattedAccount[32];
-	formatAccountNumber(user.accountNumber, formattedAccount, sizeof(formattedAccount));
+    User *user = currentUser;
+    // Copy account number
+    strncpy(userAccountNumber, user->accountNumber, sizeof(userAccountNumber)-1);
+    userAccountNumber[sizeof(userAccountNumber)-1] = '\0';
 
-	int len = strlen(formattedAccount);
-	if (len >= 4)
-	    snprintf(maskedAccount, sizeof(maskedAccount), "**** **** **** %.4s", formattedAccount + len - 4);
-	else
-	    snprintf(maskedAccount, sizeof(maskedAccount), "****");
+    // Format masked account
+    char maskedAccount[32];
+    char formattedAccount[32];
+    formatAccountNumber(user->accountNumber, formattedAccount, sizeof(formattedAccount));
 
-        char firstName[32];
-        char *spacePos = strchr(user.name, ' ');
-        if (spacePos != NULL) {
-           size_t firstLen = spacePos - user.name;
-           strncpy(firstName, user.name, firstLen);
-           firstName[firstLen] = '\0';
-        } else {
-           strncpy(firstName, user.name, sizeof(firstName));
-           firstName[sizeof(firstName) - 1] = '\0';
-        }
+    int len = strlen(formattedAccount);
+    if (len >= 4)
+        snprintf(maskedAccount, sizeof(maskedAccount), "**** **** **** %.4s", formattedAccount + len - 4);
+    else
+        snprintf(maskedAccount, sizeof(maskedAccount), "****");
 
-        char firstName2[32];
-        char initial[4] = "";
+    // Extract first name (safe copy: DO NOT modify user->name)
+    char tempName[64];
+    strncpy(tempName, user->name, sizeof(tempName)-1);
+    tempName[sizeof(tempName)-1] = '\0';
 
-        char *token = strtok(user.name, " ");
-        if (token != NULL) {
-            strncpy(firstName2, token, sizeof(firstName2));
-            firstName[sizeof(firstName2)-1] = '\0';
-        }
+    char *spacePos = strchr(tempName, ' ');
+    char firstName[32];
 
-        // Get initial of last name
-        token = strtok(NULL, " ");
-        if (token != NULL && strlen(token) > 0) {
-            snprintf(initial, sizeof(initial), " %c.", token[0]);
-        }
+    if (spacePos != NULL) {
+        size_t firstLen = spacePos - tempName;
+        strncpy(firstName, tempName, firstLen);
+        firstName[firstLen] = '\0';
+    } else {
+        strncpy(firstName, tempName, sizeof(firstName));
+        firstName[sizeof(firstName)-1] = '\0';
+    }
 
-        // Combine
-        char shortName[64];
-        snprintf(shortName, sizeof(shortName), "%s%s", firstName2, initial);
+    // Get initial of last name
+    char shortName[64];
+    char *token = strtok(tempName, " ");
+    char initial[4] = "";
 
-        // Format greeting using only the first name
-        char greetingText[64];
-        snprintf(greetingText, sizeof(greetingText), "Hello, %s!", firstName);
+    if (token) {
+        strncpy(shortName, token, sizeof(shortName)-1);
+        shortName[sizeof(shortName)-1] = '\0';
+    }
 
-        // Format balance
-        char balanceText[64];
-        snprintf(balanceText, sizeof(balanceText), "Php %.2f", user.balance);
-        lv_obj_t *obj = lv_obj_create(0);
+    token = strtok(NULL, " ");
+    if (token && strlen(token) > 0) {
+        snprintf(initial, sizeof(initial), " %c.", token[0]);
+        strncat(shortName, initial, sizeof(shortName)-strlen(shortName)-1);
+    }
+
+    // Greeting
+    char greetingText[64];
+    snprintf(greetingText, sizeof(greetingText), "Hello, %s!", firstName);
+
+    // Balance
+    char balanceText[64];
+    snprintf(balanceText, sizeof(balanceText), "Php %.2f", user->balance);
+
+        lv_obj_t *obj = lv_obj_create(NULL);
         objects.dashboard = obj;
+	lv_scr_load(obj);
         lv_obj_set_pos(obj, 0, 0);
         lv_obj_set_size(obj, 800, 480);
         lv_obj_set_style_bg_color(obj, lv_color_hex(0xff92154b), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -2317,8 +2330,17 @@ void tick_screen_cash_deposit_complete() {
 
 void create_screen_transaction_history() {
 
-    lv_obj_t *obj = lv_obj_create(0);
+    if (currentUser == NULL) {
+        printf("[ERROR] currentUser is NULL in dashboard!\n");
+        return;
+    }
+
+    // lv_obj_clean(lv_scr_act());
+
+    lv_obj_t *obj = lv_obj_create(NULL);
     objects.transaction_history = obj;
+
+    lv_scr_load(obj);
     lv_obj_set_pos(obj, 0, 0);
     lv_obj_set_size(obj, 800, 480);
     lv_obj_set_style_bg_color(obj, lv_color_hex(0xff92154b), LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -2361,46 +2383,48 @@ void create_screen_transaction_history() {
 		lv_table_set_row_cnt(table, 5); // 1 header + 4 filler rows
 		
 		int count = 0;
-Transaction* txs = fetch_transaction_history(userAccountNumber, &count);
+		User *user = currentUser;
+		printf("accountNumber: ", accountNumber);
+		Transaction* txs = fetch_transaction_history(accountNumber, &count);
 
-if (txs != NULL && count > 0) {
-    // Set table row count: 1 for header + number of transactions
-    lv_table_set_row_cnt(table, count + 1);
+		if (txs != NULL && count > 0) {
+		    // Set table row count: 1 for header + number of transactions
+		    lv_table_set_row_cnt(table, count + 1);
 
-    // Column headers
-    const char* headers[] = {"ID", "Type", "Amount", "Date"};
-    for(int c = 0; c < 4; c++) {
-        lv_table_set_cell_value(table, 0, c, headers[c]);
-    }
+		    // Column headers
+		    const char* headers[] = {"ID", "Type", "Amount", "Date"};
+		    for(int c = 0; c < 4; c++) {
+			lv_table_set_cell_value(table, 0, c, headers[c]);
+		    }
 
-    char buf[32];
-    for(int r = 0; r < count; r++) {
-        // ID
-        snprintf(buf, sizeof(buf), "%d", txs[r].id);
-        lv_table_set_cell_value(table, r + 1, 0, buf);
+		    char buf[32];
+		    for(int r = 0; r < count; r++) {
+			// ID
+			snprintf(buf, sizeof(buf), "%d", txs[r].id);
+			lv_table_set_cell_value(table, r + 1, 0, buf);
 
-        // Type
-        lv_table_set_cell_value(table, r + 1, 1, txs[r].type);
+			// Type
+			lv_table_set_cell_value(table, r + 1, 1, txs[r].type);
 
-        // Amount
-        snprintf(buf, sizeof(buf), "%.2f", txs[r].amount);
-        lv_table_set_cell_value(table, r + 1, 2, buf);
+			// Amount
+			snprintf(buf, sizeof(buf), "%.2f", txs[r].amount);
+			lv_table_set_cell_value(table, r + 1, 2, buf);
 
-        // Date
-        lv_table_set_cell_value(table, r + 1, 3, txs[r].date);
-    }
+			// Date
+			lv_table_set_cell_value(table, r + 1, 3, txs[r].date);
+		    }
 
-    free(txs);
-} else {
-    printf("No transactions found.\n");
-    // Optionally, clear table or show placeholder row
-    lv_table_set_row_cnt(table, 1);
-    const char* headers[] = {"ID", "Type", "Amount", "Date"};
-    for(int c = 0; c < 4; c++) {
-        lv_table_set_cell_value(table, 0, c, headers[c]);
-    }
-}
-}
+		    free(txs);
+		} else {
+		    printf("No transactions found.\n");
+		    // Optionally, clear table or show placeholder row
+		    lv_table_set_row_cnt(table, 1);
+		    const char* headers[] = {"ID", "Type", "Amount", "Date"};
+		    for(int c = 0; c < 4; c++) {
+			lv_table_set_cell_value(table, 0, c, headers[c]);
+		    }
+		}
+		}
                 { // footing text 11
                     lv_obj_t *obj = lv_label_create(parent_obj);
                     objects.footing_text_11 = obj;
@@ -2814,6 +2838,6 @@ void create_screens() {
     // create_screen_bank_transfer_complete();
     create_screen_cash_deposit();
     create_screen_cash_deposit_complete();
-    create_screen_transaction_history();
+    // create_screen_transaction_history();
     create_screen_personal_info_registration();
 }

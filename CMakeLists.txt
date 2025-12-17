@@ -258,6 +258,7 @@ add_executable(dbanking
     src/api/account/account.c
     src/api/database.c
     src/ui/DBS_UI/src/ui/receipt.c 
+    src/api/transaction/transaction.c
 )
 
 # Link the necessary LVGL libraries + LIBUSB

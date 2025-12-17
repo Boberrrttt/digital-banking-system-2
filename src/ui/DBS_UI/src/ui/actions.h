@@ -10,21 +10,7 @@
 #include "screens.h"
 #include "globals.h"
 #include "receipt.h"
-
-typedef struct {
-    int id;
-    char type[32];
-    double amount;
-    char date[32];
-} Transaction;
-
-typedef struct {
-    char accountNumber[32];
-    char name[64];
-    double balance;
-    int fingerprintId;
-    char pin[16];
-} User;
+#include "types.h"
 
 /* ===== Screen switch functions ===== */
 extern void action_switch_to_fingerprint(lv_event_t * e);
@@ -54,5 +40,6 @@ extern void update_time_cb(lv_timer_t *timer);
 void refresh_balance_display(const char* accountNumber);
 Transaction* fetch_transaction_history(const char* accountNumber, int *count);
 int run_fingerprint_auth();
+User* get_user_by_fingerprint(int fingerprintId);
 #endif /* ACTIONS_H */
 

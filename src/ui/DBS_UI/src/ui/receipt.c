@@ -50,15 +50,23 @@ void print_receipt(const char* account_no, const char* amount, const char* trans
 
     // --- Begin printing ---
     libusb_bulk_transfer(handle, 0x01, (unsigned char*)CMD_INIT, sizeof(CMD_INIT), &transferred, 0);
-    libusb_bulk_transfer(handle, 0x01, (unsigned char*)CMD_ALIGN_CENTER, sizeof(CMD_ALIGN_CENTER), &transferred, 0);
+  // --- Header ---
+libusb_bulk_transfer(handle, 0x01, (unsigned char*)CMD_ALIGN_CENTER, sizeof(CMD_ALIGN_CENTER), &transferred, 0);
 
-    const char *header =
-        "   GROUP ONE INC.\n"
-        "       BANKKO\n"
-        "1234 Fake Street, Nowhere City\n"
-        "    Tel: (000) 123-4567\n"
-        "--------------------------------\n";
-    libusb_bulk_transfer(handle, 0x01, (unsigned char*)header, strlen(header), &transferred, 0);
+const char *header_lines[] = {
+    "GROUP ONE INC.",
+    "BANKKO",
+    "1234 Fake Street, Nowhere City",
+    "Tel: (000) 123-4567",
+    "--------------------------------"
+};
+
+for (int i = 0; i < 5; i++) {
+    libusb_bulk_transfer(handle, 0x01, (unsigned char*)header_lines[i], strlen(header_lines[i]), &transferred, 0);
+    // Print newline after each line
+    const char *newline = "\n";
+    libusb_bulk_transfer(handle, 0x01, (unsigned char*)newline, strlen(newline), &transferred, 0);
+}
 
     // --- Transaction Info ---
     libusb_bulk_transfer(handle, 0x01, (unsigned char*)CMD_ALIGN_LEFT, sizeof(CMD_ALIGN_LEFT), &transferred, 0);
