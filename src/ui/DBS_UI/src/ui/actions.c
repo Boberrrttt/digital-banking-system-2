@@ -11,11 +11,11 @@
 #include "receipt.h"
 #include "actions.h"
 #include "types.h"
+#include <fcntl.h>
 
 extern lv_obj_t *objects_balance_tf;
 extern lv_obj_t *objects_transaction_history;
 extern char userAccountNumber[];
-
 FILE *fp_fingerprint = NULL;
 lv_timer_t *fingerprint_timer = NULL;
 
@@ -23,6 +23,248 @@ volatile int billPulseCount = 0;
 volatile int billDetected = 0;
 double billValue = 0.0;
 
+FILE *fp_bill = NULL;
+int cash_deposit_amount = 0;
+lv_timer_t *bill_timer = NULL;
+
+void switch_to_dashboard_async(void *param) {
+    LV_UNUSED(param);
+    lv_textarea_set_text(objects.cd_amount_tf, "0");
+    lv_scr_load(objects.dashboard);
+}
+
+void refresh_balance_display(const char* accountNumber) {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+    double balance = 0.0;
+
+    if (sqlite3_open("/root/Desktop/test/lv_port_linux/src/api/bank.db", &db) == SQLITE_OK) {
+        const char *sql = "SELECT balance FROM users WHERE accountNumber = ?;";
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
+            sqlite3_bind_text(stmt, 1, accountNumber, -1, SQLITE_STATIC);
+            if (sqlite3_step(stmt) == SQLITE_ROW) {
+                balance = sqlite3_column_double(stmt, 0);
+            }
+            sqlite3_finalize(stmt);
+        }
+        sqlite3_close(db);
+    }
+
+    char balanceText[64];
+    snprintf(balanceText, sizeof(balanceText), "Php %.2f", balance);
+
+    if (objects.balance_tf) {
+        lv_label_set_text(objects.balance_tf, balanceText);
+    }
+}
+
+static int getAcceptorAmount(void) {
+    char buffer[128];
+    int amount = 0;
+
+    if (!fp_bill) return 0;
+
+    if (fgets(buffer, sizeof(buffer), fp_bill) != NULL) {
+        amount = atoi(buffer);
+        if (amount > 0) {
+            cash_deposit_amount += amount;
+        }
+    }
+
+    return amount;
+}
+
+int deposit_amount(const char *accountNumber, double amount) {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+    char *errMsg = NULL;
+
+    if (amount <= 0) {
+        printf("[ERROR] Invalid deposit amount\n");
+        return 0;
+    }
+
+    if (sqlite3_open("/root/Desktop/test/lv_port_linux/src/api/bank.db", &db) != SQLITE_OK) {
+        printf("[ERROR] Cannot open database: %s\n", sqlite3_errmsg(db));
+        return 0;
+    }
+
+    /* 1️⃣ Update account balance */
+    const char *update_balance_sql =
+        "UPDATE users SET balance = balance + ? WHERE accountNumber = ?;";
+
+    if (sqlite3_prepare_v2(db, update_balance_sql, -1, &stmt, NULL) != SQLITE_OK) {
+        printf("[ERROR] Prepare failed: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return 0;
+    }
+
+    sqlite3_bind_double(stmt, 1, amount);
+    sqlite3_bind_text(stmt, 2, accountNumber, -1, SQLITE_STATIC);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        printf("[ERROR] Balance update failed\n");
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    }
+
+    sqlite3_finalize(stmt);
+
+    /* 2️⃣ Insert transaction record */
+    const char *insert_tx_sql =
+        "INSERT INTO transactions (accountNumber, type, amount, date) "
+        "VALUES (?, 'Cash Deposit', ?, datetime('now'));";
+
+    if (sqlite3_prepare_v2(db, insert_tx_sql, -1, &stmt, NULL) != SQLITE_OK) {
+        printf("[ERROR] Prepare insert failed: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return 0;
+    }
+
+    sqlite3_bind_text(stmt, 1, accountNumber, -1, SQLITE_STATIC);
+    sqlite3_bind_double(stmt, 2, amount);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        printf("[ERROR] Transaction insert failed\n");
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return 0;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+
+    refresh_balance_display(accountNumber);
+
+    printf("✅ Deposit successful: %.2f\n", amount);
+    return 1;
+}
+
+void stop_bill_acceptor(void) {
+    // Stop LVGL timer first
+    if (bill_timer) {
+        lv_timer_del(bill_timer);
+        bill_timer = NULL;
+    }
+
+    // Stop python process
+    if (fp_bill) {
+        pclose(fp_bill);
+        fp_bill = NULL;
+    }
+
+    printf("[INFO] Bill acceptor stopped\n");
+}
+
+
+void action_cd_deposit(lv_event_t *e) {
+    LV_UNUSED(e);
+
+    if (cash_deposit_amount <= 0) {
+        printf("[WARN] No cash to deposit\n");
+        return;
+    }
+
+    printf("[INFO] Depositing amount: %d\n", cash_deposit_amount);
+
+    if (deposit_amount(userAccountNumber, (double)cash_deposit_amount)) {
+        printf("[OK] Deposit successful\n");
+
+       //  stop_bill_acceptor(); 
+        cash_deposit_amount = 0;
+
+	lv_async_call(switch_to_dashboard_async, NULL);
+    } else {
+        printf("[ERROR] Deposit failed\n");
+    }
+}
+
+
+
+void bill_timer_cb(lv_timer_t *timer) {
+    LV_UNUSED(timer);
+
+    if (!fp_bill) return;
+
+    char buffer[128];
+
+    // ✅ Read ALL available lines without blocking
+    while (fgets(buffer, sizeof(buffer), fp_bill)) {
+
+        printf("Raw bill_acceptor output: '%s'\n", buffer);
+
+        int pulse_value = atoi(buffer);
+
+        if (pulse_value > 0) {
+            // Example: each pulse = 10 pesos
+            cash_deposit_amount += 10;
+
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%d", cash_deposit_amount);
+            lv_textarea_set_text(objects.cd_amount_tf, buf);
+
+            printf("Total cash deposit: %d\n", cash_deposit_amount);
+        }
+    }
+}
+
+
+
+static void start_bill_acceptor(void) {
+    if (fp_bill) return;
+
+    fp_bill = popen(
+        "/bin/bash -c 'source /root/bill-env/bin/activate && python3 -u /root/bill_acceptor.py'",
+        "r"
+    );
+
+    if (!fp_bill) {
+        printf("[ERROR] Failed to start bill acceptor\n");
+        return;
+    }
+
+    // ✅ MAKE PIPE NON-BLOCKING
+    int fd = fileno(fp_bill);
+    fcntl(fd, F_SETFL, O_NONBLOCK);
+
+    cash_deposit_amount = 0;
+    lv_textarea_set_text(objects.cd_amount_tf, "0");
+
+    bill_timer = lv_timer_create(bill_timer_cb, 100, NULL);
+}
+
+
+void credit_recipient(const char* recipientAccount, double amt) {
+    sqlite3 *db;
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_open("/root/Desktop/test/lv_port_linux/src/api/bank.db", &db) != SQLITE_OK) {
+        printf("Cannot open database: %s\n", sqlite3_errmsg(db));
+        return;
+    }
+
+    // Update the recipient's balance
+    const char *sql = "UPDATE users SET balance = balance + ? WHERE accountNumber = ?;";
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) != SQLITE_OK) {
+        printf("Failed to prepare statement: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return;
+    }
+
+    sqlite3_bind_double(stmt, 1, amt);
+    sqlite3_bind_text(stmt, 2, recipientAccount, -1, SQLITE_STATIC);
+
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        printf("Failed to update recipient balance: %s\n", sqlite3_errmsg(db));
+    } else {
+        printf("✅ Recipient %s credited with %.2f\n", recipientAccount, amt);
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+}
 
 void refresh_transaction_history_table() {
     // Check that the user is logged in and the table exists
@@ -88,6 +330,7 @@ int run_fingerprint_auth() {
     return finger_id;
 }
 
+
 Transaction* fetch_transaction_history(const char* accountNumber, int *count) {
     sqlite3 *db;
     sqlite3_stmt *stmt;
@@ -147,30 +390,6 @@ Transaction* fetch_transaction_history(const char* accountNumber, int *count) {
     return transactions;
 }
 
-void refresh_balance_display(const char* accountNumber) {
-    sqlite3 *db;
-    sqlite3_stmt *stmt;
-    double balance = 0.0;
-
-    if (sqlite3_open("/root/Desktop/test/lv_port_linux/src/api/bank.db", &db) == SQLITE_OK) {
-        const char *sql = "SELECT balance FROM users WHERE accountNumber = ?;";
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, NULL) == SQLITE_OK) {
-            sqlite3_bind_text(stmt, 1, accountNumber, -1, SQLITE_STATIC);
-            if (sqlite3_step(stmt) == SQLITE_ROW) {
-                balance = sqlite3_column_double(stmt, 0);
-            }
-            sqlite3_finalize(stmt);
-        }
-        sqlite3_close(db);
-    }
-
-    char balanceText[64];
-    snprintf(balanceText, sizeof(balanceText), "Php %.2f", balance);
-
-    if (objects.balance_tf) {
-        lv_label_set_text(objects.balance_tf, balanceText);
-    }
-}
 
 User* get_user_by_fingerprint(int fingerprintId) {
     sqlite3 *db;
@@ -337,9 +556,14 @@ void action_switch_to_main(lv_event_t * e) {
     create_screens();
 }
 
-void action_switch_to_dashboard(lv_event_t * e) {
-    printf("Switch to dashboard screen\n");
-    lv_scr_load(objects.dashboard);
+
+void action_switch_to_dashboard(lv_event_t *e) {
+    LV_UNUSED(e);
+
+   // stop_bill_acceptor();   
+
+    printf("Switching to dashboard (async)\n");
+    lv_async_call(switch_to_dashboard_async, NULL);
 }
 
 void action_switch_to_money_transfer(lv_event_t * e) {
@@ -350,6 +574,7 @@ void action_switch_to_money_transfer(lv_event_t * e) {
 void action_switch_to_cash_deposit(lv_event_t * e) {
     printf("Switch to cash deposit screen\n");
     lv_scr_load(objects.cash_deposit);
+    start_bill_acceptor();
 }
 
 void action_switch_to_transac_his(lv_event_t * e) {
@@ -359,9 +584,7 @@ void action_switch_to_transac_his(lv_event_t * e) {
     }
 
     printf("Switch to transaction history screen\n");
-    // Load the screen
     lv_scr_load(objects.transaction_history);
-        // Refresh table content
     refresh_transaction_history_table();
 
 }
@@ -378,18 +601,25 @@ void action_switch_to_bank_transfer_complete(lv_event_t * e) {
     printf("Switch to bank transfer complete\n");
 
     double amt = atof(amount);
-    const char* user_account = accountNumber;
 
-    if (deduct_balance(user_account, amt)) {
-        createTransaction(user_account, "Money Transfer", amt);
-        refresh_balance_display(user_account); // 🔥 update dashboard in real time
-        printf("✅ Amount %.2f deducted and transaction recorded.\n", amt);
+    // Deduct from sender
+    if (deduct_balance(userAccountNumber, amt)) {
+        createTransaction(userAccountNumber, "Money Transfer Sent", amt);
+
+        // Credit recipient using SQL
+        credit_recipient(accountNumber, amt);
+        createTransaction(accountNumber, "Money Transfer Received", amt);
+
+        // Update dashboards
+        refresh_balance_display(userAccountNumber);
+        // refresh_balance_display(accountNumber);
     } else {
         printf("❌ Transaction failed (insufficient balance or error).\n");
     }
 
     lv_scr_load(objects.bank_transfer_complete);
 }
+
 
 void action_switch_to_register(lv_event_t * e) {
     printf("Switch to registration\n");

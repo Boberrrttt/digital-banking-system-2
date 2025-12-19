@@ -19,6 +19,11 @@ lv_obj_t *tick_value_change_obj;
 lv_obj_t *transaction_list;
 // uint32_t active_theme_index = 0;
 
+//FILE *fp_bill = NULL;
+//int cash_deposit_amount = 0;
+//static lv_timer_t *bill_timer = NULL;
+
+
 void formatAccountNumber(const char *input, char *output, size_t size) {
     int len = strlen(input);
     int j = 0;
@@ -157,18 +162,18 @@ void create_screen_main() {
                     lv_obj_set_style_align(obj, LV_ALIGN_BOTTOM_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "Group One Inc.");
                 }
-                {
+                //{
                     // log in with text_2
-                    lv_obj_t *obj = lv_label_create(parent_obj);
-                    objects.log_in_with_text_2 = obj;
-                    lv_obj_set_pos(obj, 267, 89);
-                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_text_font(obj, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_label_set_text(obj, "Are you a new user?");
-                }
+                //    lv_obj_t *obj = lv_label_create(parent_obj);
+                //    objects.log_in_with_text_2 = obj;
+                //    lv_obj_set_pos(obj, 267, 89);
+                //    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                //    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_obj_set_style_text_font(obj, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_label_set_text(obj, "Are you a new user?");
+                //}
                 {
                     // log in with text_3
                     lv_obj_t *obj = lv_label_create(parent_obj);
@@ -218,29 +223,29 @@ void create_screen_main() {
                 }
                 {
                     // transaction history button_5
-                    lv_obj_t *obj = lv_button_create(parent_obj);
-                    objects.transaction_history_button_5 = obj;
-                    lv_obj_set_pos(obj, 511, 275);
-                    lv_obj_set_size(obj, 207, 62);
-                    lv_obj_set_style_bg_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_bg_opa(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_margin_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-                    {
-                        lv_obj_t *parent_obj = obj;
-                        {
-                            // transaction history text_5
-                            lv_obj_t *obj = lv_label_create(parent_obj);
-                            objects.transaction_history_text_5 = obj;
-                            lv_obj_set_pos(obj, 17, 0);
-                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                            lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);  // make it clickable
-                            lv_obj_add_event_cb(obj, action_switch_to_register, LV_EVENT_PRESSED, (void *)0);
-                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_text_font(obj, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_label_set_text(obj, "Register Now!");
-                        }
-                    }
+                //    lv_obj_t *obj = lv_button_create(parent_obj);
+                //    objects.transaction_history_button_5 = obj;
+                //   lv_obj_set_pos(obj, 511, 275);
+                //    lv_obj_set_size(obj, 207, 62);
+                //    lv_obj_set_style_bg_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_obj_set_style_bg_opa(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_obj_set_style_margin_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //    {
+                //        lv_obj_t *parent_obj = obj;
+                //        {
+                //            // transaction history text_5
+                //           lv_obj_t *obj = lv_label_create(parent_obj);
+                //            objects.transaction_history_text_5 = obj;
+                //            lv_obj_set_pos(obj, 17, 0);
+                //            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                //            lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);  // make it clickable
+                //            lv_obj_add_event_cb(obj, action_switch_to_register, LV_EVENT_PRESSED, (void *)0);
+                //            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //            lv_obj_set_style_text_font(obj, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
+                //            lv_label_set_text(obj, "Register Now!");
+                //        }
+                //    }
                 }
                 {
                     // footing text
@@ -363,7 +368,7 @@ void create_screen_fingerprint_scan() {
                     lv_obj_set_pos(obj, 298, 103);
                     lv_obj_set_size(obj, 121, 132);
                     lv_obj_add_flag(obj, LV_OBJ_FLAG_CLICKABLE);  // make it clickable
-                    // lv_obj_add_event_cb(obj, action_switch_to_dashboard, LV_EVENT_PRESSED, (void *)0);
+                    lv_obj_add_event_cb(obj, action_switch_to_dashboard, LV_EVENT_PRESSED, (void *)0);
                     lv_image_set_src(obj, &img_fingerprint_icon);
                     lv_image_set_scale(obj, 100);
                 }
@@ -2088,7 +2093,7 @@ void create_screen_cash_deposit() {
                     objects.cd_return_button = obj;
                     lv_obj_set_pos(obj, 0, 275);
                     lv_obj_set_size(obj, 207, 62);
-                    lv_obj_add_event_cb(obj, action_switch_to_dashboard, LV_EVENT_PRESSED, (void *)0);
+		    lv_obj_add_event_cb(obj, action_switch_to_dashboard, LV_EVENT_PRESSED, NULL);
                     lv_obj_set_style_bg_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_bg_opa(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_margin_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -2118,6 +2123,30 @@ void create_screen_cash_deposit() {
                     lv_obj_set_style_text_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_label_set_text(obj, "For your query, please contact:\n(02) 123 456 7890");
+                }
+                {
+                    lv_obj_t *obj = lv_button_create(parent_obj);
+                    objects.cd_return_button = obj;
+                    lv_obj_set_pos(obj, 500, 275);
+                    lv_obj_set_size(obj, 207, 62);
+		    lv_obj_add_event_cb(obj, action_cd_deposit, LV_EVENT_CLICKED, NULL);
+                    lv_obj_set_style_bg_color(obj, lv_color_hex(0xffffffff), LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_bg_opa(obj, 30, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_margin_right(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    lv_obj_set_style_outline_width(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+                    {
+                        lv_obj_t *parent_obj = obj;
+                        {
+                            // CD return text
+                            lv_obj_t *obj = lv_label_create(parent_obj);
+                            objects.cd_return_text = obj;
+                            lv_obj_set_pos(obj, -47, 0);
+                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_font(obj, &lv_font_montserrat_18, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_label_set_text(obj, "Deposit");
+                        }
+                    }
                 }
             }
         }
@@ -2161,10 +2190,26 @@ void create_screen_cash_deposit() {
         }
     }
 
+
     tick_screen_cash_deposit();
 }
 
 void tick_screen_cash_deposit() {
+//	if (!fp_bill) return;
+
+//	char buffer[128];
+
+//	while (fgets(buffer, sizeof(buffer), fp_bill)) {
+//		if (strncmp(buffer, "ADD", 4) == 0) {
+//			int value = atoi(buffer+4);
+//			cash_deposit_amount +=value;
+
+//			char amount_str[32];
+//			snprintf(amount_str, sizeof(amount_str), "%d", cash_deposit_amount);
+//
+//			lv_textarea_set_text(objects.cd_amount_tf, amount_str);
+//		}
+//	}
 }
 
 void create_screen_cash_deposit_complete() {
@@ -2321,6 +2366,10 @@ void create_screen_cash_deposit_complete() {
             }
         }
     }
+  //  if(fp_bill){
+//	    pclose(fp_bill);
+//	    fp_bill = NULL;
+  //  }
 
     tick_screen_cash_deposit_complete();
 }

@@ -41,5 +41,8 @@ void refresh_balance_display(const char* accountNumber);
 Transaction* fetch_transaction_history(const char* accountNumber, int *count);
 int run_fingerprint_auth();
 User* get_user_by_fingerprint(int fingerprintId);
+int deposit_amount(const char *accountNumber, double amount);
+void action_cd_deposit(lv_event_t *e);
+
 #endif /* ACTIONS_H */
 
